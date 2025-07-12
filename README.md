@@ -7,7 +7,8 @@
 - 🔗 **OpenAI API兼容**: 完全兼容OpenAI API格式，支持现有的OpenAI SDK
 - 🔐 **API Key验证**: 支持多种API key验证方式，防止未授权访问
 - 🔄 **Token池管理**: 支持多个token轮换使用，自动故障转移
-- 🆔 **自动对话创建**: 每次聊天前自动创建新的对话ID，确保会话隔离
+- 🆔 **自动对话管理**: 每次聊天前自动删除旧对话并创建新的对话ID，确保会话隔离
+- 🧹 **智能清理**: 自动清理项目下的所有conversation，避免对话历史积累
 - 📡 **动态Referer**: 根据对话ID动态生成referer头部，提高API兼容性
 - 🎯 **智能重试**: 自动重试失败的请求，支持指数退避
 - 📊 **状态监控**: 实时监控服务状态和token池状态
@@ -53,6 +54,7 @@ orina2api/
 
 - `GET /health` - 健康检查
 - `GET /` - 根路径信息
+- `DELETE /admin/conversations` - 删除所有项目下的conversations（管理接口）
 
 ## 🚀 快速开始
 
@@ -85,7 +87,7 @@ REQUIRE_API_KEY=true
 TOKEN_POOL=["your_token_1", "your_token_2", "your_token_3"]
 
 # 模型配置
-AVAILABLE_MODELS=["claude-4-default", "gpt-4", "gpt-3.5-turbo"]
+AVAILABLE_MODELS=["ChatGPT 4.1 Mini-Default", "ChatGPT 4.1 Mini-Writer", "ChatGPT 4.1 Mini-Researcher", "ChatGPT 4.1 Mini-Study", "ChatGPT 4.1 Mini-Developer", "ChatGPT 4.1 Mini-SEO Mode", "ChatGPT 4.1 Mini-Cybersecurity Mode", "Claude 4-Default", "Claude 4-Writer", "Claude 4-Researcher", "Claude 4-Study", "Claude 4-Developer", "Claude 4-SEO Mode", "Claude 4-Cybersecurity Mode", "o4-Default", "o4-Writer", "o4-Researcher", "o4-Study", "o4-Developer", "o4-SEO Mode", "o4-Cybersecurity Mode"]
 ```
 
 ### 3. 启动服务
@@ -109,18 +111,31 @@ python start.py --port 9000
 
 ## 🎯 使用示例
 
-### 对话创建流程
+### 对话管理流程
 
 现在每次聊天请求都会自动执行以下流程：
 
-1. **创建对话**: 自动调用 `POST /conversation` 接口创建新的对话ID
-2. **动态Referer**: 根据对话ID生成动态的referer头部
-3. **发起聊天**: 使用创建的对话ID进行实际的聊天请求
+1. **清理旧对话**: 自动删除项目下的所有现有conversations
+2. **创建新对话**: 调用 `POST /conversation` 接口创建新的对话ID
+3. **动态Referer**: 根据对话ID生成动态的referer头部
+4. **发起聊天**: 使用创建的对话ID进行实际的聊天请求
 
 ```
 请求流程:
-用户请求 → 创建对话 → 获取对话ID → 更新Headers → 发起聊天 → 返回响应
+用户请求 → 删除旧对话 → 创建新对话 → 获取对话ID → 更新Headers → 发起聊天 → 返回响应
 ```
+
+这确保了每次聊天都是全新的对话，避免了对话历史的积累和干扰。
+
+### 手动管理
+
+如果需要手动清理所有conversations，可以使用管理接口：
+
+```bash
+curl -X DELETE "http://localhost:3333/admin/conversations"
+```
+
+详细使用说明请参考：[Conversation管理功能文档](docs/conversation_management.md)
 
 ### OpenAI SDK兼容
 
@@ -201,7 +216,20 @@ Token池支持以下特性：
 支持动态配置可用模型：
 
 ```json
-["ChatGPT 4.1 Mini-Default", "ChatGPT 4.1-Default",  "o4-Default", "Gemini 2.5 Flash 05-20-Default", "Gemini 2.5 Pro 06-05-Default", "Claude 3.5 Sonnet-Default", "Claude 4-Default", "DeepSeek R1-Default", "DeepSeek V3-Default", "Grok 3 Mini-Default", "Grok 3-Default", "Grok 4-Default"]
+[
+  "ChatGPT 4.1 Mini-Default", "ChatGPT 4.1 Mini-Writer", "ChatGPT 4.1 Mini-Researcher", "ChatGPT 4.1 Mini-Study", "ChatGPT 4.1 Mini-Developer", "ChatGPT 4.1 Mini-SEO Mode", "ChatGPT 4.1 Mini-Cybersecurity Mode",
+  "ChatGPT 4.1-Default", "ChatGPT 4.1-Writer", "ChatGPT 4.1-Researcher", "ChatGPT 4.1-Study", "ChatGPT 4.1-Developer", "ChatGPT 4.1-SEO Mode", "ChatGPT 4.1-Cybersecurity Mode",
+  "o4-Default", "o4-Writer", "o4-Researcher", "o4-Study", "o4-Developer", "o4-SEO Mode", "o4-Cybersecurity Mode",
+  "Gemini 2.5 Flash 05-20-Default", "Gemini 2.5 Flash 05-20-Writer", "Gemini 2.5 Flash 05-20-Researcher", "Gemini 2.5 Flash 05-20-Study", "Gemini 2.5 Flash 05-20-Developer", "Gemini 2.5 Flash 05-20-SEO Mode", "Gemini 2.5 Flash 05-20-Cybersecurity Mode",
+  "Gemini 2.5 Pro 06-05-Default", "Gemini 2.5 Pro 06-05-Writer", "Gemini 2.5 Pro 06-05-Researcher", "Gemini 2.5 Pro 06-05-Study", "Gemini 2.5 Pro 06-05-Developer", "Gemini 2.5 Pro 06-05-SEO Mode", "Gemini 2.5 Pro 06-05-Cybersecurity Mode",
+  "Claude 3.5 Sonnet-Default", "Claude 3.5 Sonnet-Writer", "Claude 3.5 Sonnet-Researcher", "Claude 3.5 Sonnet-Study", "Claude 3.5 Sonnet-Developer", "Claude 3.5 Sonnet-SEO Mode", "Claude 3.5 Sonnet-Cybersecurity Mode",
+  "Claude 4-Default", "Claude 4-Writer", "Claude 4-Researcher", "Claude 4-Study", "Claude 4-Developer", "Claude 4-SEO Mode", "Claude 4-Cybersecurity Mode",
+  "DeepSeek R1-Default", "DeepSeek R1-Writer", "DeepSeek R1-Researcher", "DeepSeek R1-Study", "DeepSeek R1-Developer", "DeepSeek R1-SEO Mode", "DeepSeek R1-Cybersecurity Mode",
+  "DeepSeek V3-Default", "DeepSeek V3-Writer", "DeepSeek V3-Researcher", "DeepSeek V3-Study", "DeepSeek V3-Developer", "DeepSeek V3-SEO Mode", "DeepSeek V3-Cybersecurity Mode",
+  "Grok 3 Mini-Default", "Grok 3 Mini-Writer", "Grok 3 Mini-Researcher", "Grok 3 Mini-Study", "Grok 3 Mini-Developer", "Grok 3 Mini-SEO Mode", "Grok 3 Mini-Cybersecurity Mode",
+  "Grok 3-Default", "Grok 3-Writer", "Grok 3-Researcher", "Grok 3-Study", "Grok 3-Developer", "Grok 3-SEO Mode", "Grok 3-Cybersecurity Mode",
+  "Grok 4-Default", "Grok 4-Writer", "Grok 4-Researcher", "Grok 4-Study", "Grok 4-Developer", "Grok 4-SEO Mode", "Grok 4-Cybersecurity Mode"
+]
 ```
 
 ## 🐳 部署

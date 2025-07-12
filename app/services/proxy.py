@@ -220,6 +220,122 @@ class ProxyService:
             logger.error(f"Error creating conversation: {e}")
             return None
     
+    async def delete_conversation(self, token: str, conversation_id: str) -> bool:
+        """删除指定的conversation"""
+        try:
+            headers = {
+                'accept': '*/*',
+                'accept-language': 'en,zh;q=0.9,zh-TW;q=0.8,zh-CN;q=0.7',
+                'cache-control': 'no-cache',
+                'pragma': 'no-cache',
+                'priority': 'u=1, i',
+                'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"macOS"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'origin': 'https://www.orionai.asia',
+                'referer': f'https://www.orionai.asia/',
+                'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
+            }
+            
+            cookies = {"token": token}
+            url = f"{settings.conversation_api_url}/{conversation_id}"
+            
+            response = await self.client.delete(
+                url,
+                headers=headers,
+                cookies=cookies
+            )
+            
+            logger.info(f"Delete conversation response status: {response.status_code}")
+            
+            if response.status_code in [200, 204]:
+                logger.info(f"Successfully deleted conversation: {conversation_id}")
+                return True
+            else:
+                logger.error(f"Failed to delete conversation: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error deleting conversation: {e}")
+            return False
+    
+    async def delete_all_conversations(self, token: str, project_id: str) -> bool:
+        """删除项目下的所有conversation"""
+        try:
+            # 获取所有conversations
+            conversations = await self.get_conversations(token, project_id)
+            if not conversations:
+                logger.info(f"No conversations found in project {project_id}")
+                return True
+            
+            # 删除每个conversation
+            deleted_count = 0
+            for conversation in conversations:
+                conversation_id = conversation.get("id")
+                if conversation_id:
+                    success = await self.delete_conversation(token, conversation_id)
+                    if success:
+                        deleted_count += 1
+                    else:
+                        logger.warning(f"Failed to delete conversation {conversation_id}")
+            
+            logger.info(f"Successfully deleted {deleted_count}/{len(conversations)} conversations in project {project_id}")
+            return deleted_count == len(conversations)
+            
+        except Exception as e:
+            logger.error(f"Error deleting all conversations: {e}")
+            return False
+        """创建新的对话，返回conversation ID"""
+        try:
+            headers = {
+                'accept': '*/*',
+                'accept-language': 'en,zh;q=0.9,zh-TW;q=0.8,zh-CN;q=0.7',
+                'cache-control': 'no-cache',
+                'content-type': 'application/json',
+                'pragma': 'no-cache',
+                'priority': 'u=1, i',
+                'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"macOS"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'referrer': f'https://www.orionai.asia/project/{project_id}',
+                'referrerPolicy': 'no-referrer-when-downgrade'
+            }
+            
+            payload = {"projectId": project_id}
+            cookies = {"token": token}
+            
+            response = await self.client.post(
+                settings.conversation_api_url,
+                json=payload,
+                headers=headers,
+                cookies=cookies
+            )
+            
+            logger.info(f"Create conversation response status: {response.status_code}")
+            
+            if response.status_code in [200, 201]:
+                response_data = response.json()
+                conversation_id = response_data.get("id") or response_data.get("conversationId") or response_data.get("conversation_id")
+                if conversation_id:
+                    logger.info(f"Successfully created conversation: {conversation_id}")
+                    return conversation_id
+                else:
+                    logger.error(f"No conversation ID in response: {response_data}")
+                    return None
+            else:
+                logger.error(f"Failed to create conversation: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error creating conversation: {e}")
+            return None
+    
     async def get_project_and_conversation(self, token: str) -> tuple[Optional[str], Optional[str]]:
         """获取或创建project和conversation，返回(project_id, conversation_id)"""
         # 1. 获取projects列表
@@ -238,21 +354,21 @@ class ProxyService:
                 logger.error("Failed to create project")
                 return None, None
         
-        # 2. 获取conversations列表
-        conversations = await self.get_conversations(token, project_id)
-        
-        conversation_id = None
-        if conversations and len(conversations) > 0:
-            # 使用第一个conversation
-            conversation_id = conversations[0].get("id")
-            logger.info(f"Using existing conversation: {conversation_id}")
+        # 2. 删除项目下的所有现有conversations
+        logger.info(f"Deleting all existing conversations in project {project_id}")
+        delete_success = await self.delete_all_conversations(token, project_id)
+        if delete_success:
+            logger.info("Successfully deleted all existing conversations")
         else:
-            # 创建新conversation
-            conversation_id = await self.create_conversation(token, project_id)
-            if not conversation_id:
-                logger.error("Failed to create conversation")
-                return project_id, None
+            logger.warning("Failed to delete some conversations, but continuing...")
         
+        # 3. 创建新conversation
+        conversation_id = await self.create_conversation(token, project_id)
+        if not conversation_id:
+            logger.error("Failed to create conversation")
+            return project_id, None
+        
+        logger.info(f"Created new conversation: {conversation_id}")
         return project_id, conversation_id
     async def send_message(self, token: str, conversation_id: str, project_id: str, message_content: str) -> bool:
         """发送消息到conversation，返回是否成功"""

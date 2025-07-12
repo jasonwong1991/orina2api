@@ -29,7 +29,7 @@ class ChatCompletionRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "model": "claude-4-default",
+                "model": "Claude 4-Default",
                 "messages": [
                     {"role": "user", "content": "Hello, how are you?"}
                 ],

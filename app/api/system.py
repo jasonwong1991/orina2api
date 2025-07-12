@@ -67,3 +67,81 @@ async def health_check():
                 "timestamp": datetime.now().isoformat()
             }
         )
+@router.delete("/admin/conversations")
+async def delete_all_conversations():
+    """管理端点：删除所有项目下的conversations"""
+    try:
+        # 获取一个可用token
+        token = await token_manager.get_token()
+        if not token:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "error",
+                    "message": "No available tokens in the pool",
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        
+        # 使用proxy_service的异步上下文管理器
+        async with proxy_service:
+            # 获取所有projects
+            projects = await proxy_service.get_projects(token)
+            if not projects:
+                return {
+                    "status": "success",
+                    "message": "No projects found",
+                    "deleted_conversations": 0,
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            total_deleted = 0
+            project_results = []
+            
+            # 遍历每个project，删除其下的所有conversations
+            for project in projects:
+                project_id = project.get("id")
+                project_name = project.get("name", "Unknown")
+                
+                if project_id:
+                    # 删除该项目下的所有conversations
+                    success = await proxy_service.delete_all_conversations(token, project_id)
+                    
+                    # 获取删除前的conversations数量（用于统计）
+                    conversations = await proxy_service.get_conversations(token, project_id)
+                    deleted_count = len(conversations) if conversations else 0
+                    
+                    if success:
+                        total_deleted += deleted_count
+                        project_results.append({
+                            "project_id": project_id,
+                            "project_name": project_name,
+                            "status": "success",
+                            "deleted_conversations": deleted_count
+                        })
+                    else:
+                        project_results.append({
+                            "project_id": project_id,
+                            "project_name": project_name,
+                            "status": "partial_failure",
+                            "deleted_conversations": 0
+                        })
+            
+            return {
+                "status": "success",
+                "message": f"Deleted conversations from {len(projects)} projects",
+                "total_deleted_conversations": total_deleted,
+                "project_results": project_results,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"Failed to delete all conversations: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": f"Failed to delete conversations: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            }
+        )
