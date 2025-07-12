@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  llm-proxy:
+    build: .
+    ports:
+      - "3333:3333"
+    environment:
+      # 从.env文件读取环境变量
+      - APP_NAME=${APP_NAME:-LLM Proxy API}
+      - DEBUG=${DEBUG:-false}
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-3333}
+      
+      # API Key配置
+      - API_KEYS=${API_KEYS}
+      - REQUIRE_API_KEY=${REQUIRE_API_KEY:-true}
+      
+      # 目标API配置
+      - TARGET_API_URL=${TARGET_API_URL}
+      - CONVERSATION_API_URL=${CONVERSATION_API_URL}
+      - PROJECT_API_URL=${PROJECT_API_URL}
+      - MESSAGE_API_URL=${MESSAGE_API_URL}
+      
+      # Token池配置
+      - TOKEN_POOL=${TOKEN_POOL}
+      
+      # 模型配置
+      - AVAILABLE_MODELS=${AVAILABLE_MODELS}
+      
+      # 请求配置
+      - TIMEOUT=${TIMEOUT:-30}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - RETRY_DELAY=${RETRY_DELAY:-1.0}
+    
+    env_file:
+      - .env
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    volumes:
+      # 可选：挂载日志目录
+      - ./logs:/app/logs
+    
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
